@@ -1,11 +1,11 @@
 
+// version 1.1 Aug  5, 2026
 #include <FastLED.h>
 #include <WiFiS3.h>
 
-//Video on YouTube - suburbandone
 // Enter your WiFi network name and password between the quotation marks.
-#define SECRET_SSID "router name"
-#define SECRET_PASS "router password"
+#define SECRET_SSID "??????????????"
+#define SECRET_PASS "????????????????????"
 
 #define DATA_PIN     8
 #define NUM_LEDS     50
@@ -21,6 +21,8 @@ bool twinkleRising[NUM_LEDS];
 
 uint8_t fireflyLevel[NUM_LEDS];
 bool fireflyRising[NUM_LEDS];
+bool fireflyEnabled[NUM_LEDS];
+unsigned long nextFireflyTime[NUM_LEDS];
 
 const CRGB FIREFLY_COLOR = CRGB::Yellow;
 const uint8_t NORMAL_LEVEL = 70;
@@ -37,7 +39,6 @@ uint8_t twinkleRate = 0;
 uint8_t fireflyRate = 0;
 
 unsigned long previousEffectUpdate = 0;
-unsigned long nextFireflyTime = 0;
 
 WiFiServer webServer(80);
 bool wifiConnected = false;
@@ -503,7 +504,24 @@ void startFireflies(uint8_t rate) {
   fadeToTarget();
 
   fireflyRate = rate;
-  scheduleNextFirefly();
+
+  uint8_t enabledCount;
+
+  switch (fireflyRate) {
+    case 1: enabledCount = 25; break;
+    case 2: enabledCount = NUM_LEDS; break;
+    default: enabledCount = NUM_LEDS; break;
+  }
+
+  while (enabledCount > 0) {
+    int i = random(NUM_LEDS);
+
+    if (!fireflyEnabled[i]) {
+      fireflyEnabled[i] = true;
+      scheduleNextFirefly(i);
+      enabledCount--;
+    }
+  }
 
   Serial.print(F("FIREFLIES L"));
   Serial.println(fireflyRate);
@@ -514,33 +532,27 @@ void stopFireflies() {
   clearFireflies();
 }
 
-void scheduleNextFirefly() {
+void scheduleNextFirefly(int ledNumber) {
   unsigned long waitTime;
 
   switch (fireflyRate) {
-    case 1: waitTime = random(3200, 9601); break;
-    case 2: waitTime = random(800, 3201); break;
-    default: waitTime = random(160, 801); break;
+    case 1: waitTime = random(15000, 20001); break;
+    case 2: waitTime = random(10000, 15001); break;
+    default: waitTime = random(8000, 12001); break;
   }
 
-  nextFireflyTime = millis() + waitTime;
+  nextFireflyTime[ledNumber] = millis() + waitTime;
 }
 
 void updateFireflies() {
-  if ((long)(millis() - nextFireflyTime) >= 0) {
-    int start = random(NUM_LEDS);
+  unsigned long now = millis();
 
-    for (int offset = 0; offset < NUM_LEDS; offset++) {
-      int i = (start + offset) % NUM_LEDS;
-
-      if (fireflyLevel[i] == 0) {
-        fireflyLevel[i] = 18;
-        fireflyRising[i] = true;
-        break;
-      }
+  for (int i = 0; i < NUM_LEDS; i++) {
+    if (fireflyEnabled[i] && (long)(now - nextFireflyTime[i]) >= 0) {
+      fireflyLevel[i] = 18;
+      fireflyRising[i] = true;
+      scheduleNextFirefly(i);
     }
-
-    scheduleNextFirefly();
   }
 
   for (int i = 0; i < NUM_LEDS; i++) {
@@ -582,6 +594,8 @@ void clearFireflies() {
   for (int i = 0; i < NUM_LEDS; i++) {
     fireflyLevel[i] = 0;
     fireflyRising[i] = false;
+    fireflyEnabled[i] = false;
+    nextFireflyTime[i] = 0;
   }
 }
 
@@ -671,9 +685,10 @@ void printMenu() {
   Serial.println(F("T2 = Medium twinkle"));
   Serial.println(F("T3 = Lively twinkle"));
   Serial.println();
-  Serial.println(F("L1 = Sparse fireflies: 3.2-9.6 seconds"));
-  Serial.println(F("L2 = Medium fireflies: 0.8-3.2 seconds"));
-  Serial.println(F("L3 = Frequent fireflies: 0.16-0.8 second"));
+  Serial.println(F("L1 = 25 fireflies; each flashes every 15-20 seconds"));
+  Serial.println(F("L2 = 50 fireflies; each flashes every 10-15 seconds"));
+  Serial.println(F("L3 = 50 fireflies; each flashes every 8-12 seconds"));
+  Serial.println(F("     Every firefly has its own independent timer"));
   Serial.println();
   Serial.println(F("S  = One center-to-ends brightness swell"));
   Serial.println();
